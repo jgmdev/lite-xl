@@ -1,5 +1,6 @@
 local core = require "core"
 local common = require "core.common"
+local config = require "core.config"
 local style = require "core.style"
 local keymap = require "core.keymap"
 local Object = require "core.object"
@@ -238,8 +239,7 @@ end
 
 
 function Node:get_visible_tabs_number()
-  local nmax = math.ceil(self.size.x / style.tab_width)
-  return math.min(#self.views - self.tab_offset + 1, nmax)
+  return math.min(#self.views - self.tab_offset + 1, config.max_tabs)
 end
 
 
@@ -263,12 +263,12 @@ end
 
 
 function Node:get_tab_scroll_index(px, py)
-    for i = 1, 2 do
-      local x, y, w, h = self:get_scroll_button_rect(i)
-      if px >= x and px < x + w and py >= y and py < y + h then
-        return i
-      end
+  for i = 1, 2 do
+    local x, y, w, h = self:get_scroll_button_rect(i)
+    if px >= x and px < x + w and py >= y and py < y + h then
+      return i
     end
+  end
 end
 
 
@@ -795,7 +795,9 @@ function RootView:on_mouse_moved(x, y, dx, dy)
   local node = self.root_node:get_child_overlapping_point(x, y)
   local div = self.root_node:get_divider_overlapping_point(x, y)
   local tab_index = node and node:get_tab_overlapping_point(x, y)
-  if div then
+  if node and node:get_tab_scroll_index(x, y) then
+    system.set_cursor("arrow")
+  elseif div then
     local axis = (div.type == "hsplit" and "x" or "y")
     if div.a:is_resizable(axis) and div.b:is_resizable(axis) then
       system.set_cursor(div.type == "hsplit" and "sizeh" or "sizev")
@@ -808,8 +810,6 @@ function RootView:on_mouse_moved(x, y, dx, dy)
       table.insert(node.views, tab_index, tab)
       self.dragged_node = tab_index
     end
-  elseif self:get_tab_scroll_index(x, y) then
-    system.set_cursor("arrow")
   else
     system.set_cursor(node.active_view.cursor)
   end
