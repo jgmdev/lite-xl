@@ -60,7 +60,7 @@ function Node:new(type)
   self.hovered = {x = -1, y = -1 }
   self.hovered_close = 0
   self.tab_margin = 0
-  self.tab_start = 1
+  self.tab_offset = 1
   self.move_towards = View.move_towards
 end
 
@@ -238,15 +238,15 @@ end
 
 
 function Node:get_visible_tabs_number()
-  -- FIXME: do not hard-code the max number of tabs
-  return math.min(#self.views, 8)
+  local nmax = math.ceil(self.size.x / style.tab_width)
+  return math.min(#self.views - self.tab_offset + 1, nmax)
 end
 
 
 function Node:get_tab_overlapping_point(px, py)
   if #self.views == 1 then return nil end
   local tabs_number = self:get_visible_tabs_number()
-  for i = self.tab_start, tabs_number do
+  for i = self.tab_offset, self.tab_offset + tabs_number - 1 do
     local x, y, w, h = self:get_tab_rect(i)
     if px >= x and py >= y and px < x + w and py < y + h then
       return i
@@ -262,6 +262,16 @@ local function close_button_location(x, w)
 end
 
 
+function Node:get_tab_scroll_index(px, py)
+    for i = 1, 2 do
+      local x, y, w, h = self:get_scroll_button_rect(i)
+      if px >= x and px < x + w and py >= y and py < y + h then
+        return i
+      end
+    end
+end
+
+
 function Node:tab_hovered_update(px, py)
   local tab_index = self:get_tab_overlapping_point(px, py)
   self.hovered_tab = tab_index
@@ -274,11 +284,9 @@ function Node:tab_hovered_update(px, py)
       self.hovered_close = tab_index
     end
   else
-    for i = 1, 2 do
-      local x, y, w, h = self:get_scroll_button_rect(i)
-      if px >= x and px < x + w and py >= y and py < y + h then
-        self.hovered_tab_scroll = i
-      end
+    local tab_scroll_index = self:get_tab_scroll_index(px, py)
+    if tab_scroll_index then
+      self.hovered_tab_scroll = tab_scroll_index
     end
   end
 end
@@ -313,7 +321,7 @@ function Node:get_tab_rect(idx)
   local tabs_number = self:get_visible_tabs_number()
   local _, _, sbw = self:get_scroll_button_rect(1)
   local tw = math.min(style.tab_width, (self.size.x - self.tab_margin - sbw * 2) / tabs_number)
-  local x_left = self.position.x + sbw + tw * (idx - self.tab_start)
+  local x_left = self.position.x + sbw + tw * (idx - self.tab_offset)
   local x1, x2 = math.floor(x_left), math.floor(x_left + tw)
   local h = style.font:get_height() + style.padding.y * 2
   return x1, self.position.y, x2 - x1, h
@@ -417,8 +425,45 @@ function Node:update_layout()
 end
 
 
+function Node:scroll_tabs_to_visible()
+  local index = self:get_view_idx(self.active_view)
+  if index then
+    local tabs_number = self:get_visible_tabs_number()
+    if self.tab_offset > index then
+      self.tab_offset = index
+    elseif self.tab_offset + tabs_number - 1 < index then
+      self.tab_offset = index - tabs_number + 1
+    end
+  end
+end
+
+
+function Node:scroll_tabs(dir)
+  local view_index = self:get_view_idx(self.active_view)
+  if dir == 1 then
+    if self.tab_offset > 1 then
+      self.tab_offset = self.tab_offset - 1
+      local last_index = self.tab_offset + self:get_visible_tabs_number() - 1
+      if view_index > last_index then
+        self:set_active_view(self.views[last_index])
+      end
+    end
+  elseif dir == 2 then
+    local tabs_number = self:get_visible_tabs_number()
+    if self.tab_offset + tabs_number - 1 < #self.views then
+      self.tab_offset = self.tab_offset + 1
+      local view_index = self:get_view_idx(self.active_view)
+      if view_index < self.tab_offset then
+        self:set_active_view(self.views[self.tab_offset])
+      end
+    end
+  end
+end
+
+
 function Node:update()
   if self.type == "leaf" then
+    self:scroll_tabs_to_visible()
     for _, view in ipairs(self.views) do
       view:update()
     end
@@ -432,26 +477,27 @@ end
 
 
 function Node:draw_tabs()
-  local x, y, _, h, scroll_padding = self:get_scroll_button_rect(1)
+  local x, y, w, h, scroll_padding = self:get_scroll_button_rect(1)
   local ds = style.divider_size
   local dots_width = style.font:get_width("…")
   core.push_clip_rect(x, y, self.size.x, h)
   renderer.draw_rect(x, y, self.size.x, h, style.background2)
   renderer.draw_rect(x, y + h - ds, self.size.x, ds, style.divider)
 
-  if self.tab_start > 1 then
+  if self.tab_offset > 1 then
     local button_style = self.hovered_tab_scroll == 1 and style.text or style.dim
     common.draw_text(style.icon_font, button_style, "<", nil, x + scroll_padding, y, 0, h)
   end
 
   local tabs_number = self:get_visible_tabs_number()
-  if #self.views > self.tab_start + tabs_number - 1 then
-    local xrb, yrb = self:get_scroll_button_rect(2)
+  if #self.views > self.tab_offset + tabs_number - 1 then
+    local xrb, yrb, wrb = self:get_scroll_button_rect(2)
     local button_style = self.hovered_tab_scroll == 2 and style.text or style.dim
     common.draw_text(style.icon_font, button_style, ">", nil, xrb + scroll_padding, yrb, 0, h)
   end
 
-  for i, view in ipairs(self.views) do
+  for i = self.tab_offset, self.tab_offset + tabs_number - 1 do
+    local view = self.views[i]
     local x, y, w, h = self:get_tab_rect(i)
     local text = view:get_name()
     local color = style.dim
@@ -680,16 +726,9 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
     return
   end
   local node = self.root_node:get_child_overlapping_point(x, y)
-  -- FIXME: move the operations below into a node's method
-  if node.hovered_tab_scroll == 1 then
-    if node.tab_start > 1 then
-      node.tab_start = node.tab_start - 1
-    end
-  elseif node.hovered_tab_scroll == 2 then
-    local tabs_number = node:get_visible_tabs_number()
-    if node.tab_start + tabs_number - 1 < #node.views then
-      node.tab_start = node.tab_start + 1
-    end
+  if node.hovered_tab_scroll > 0 then
+    node:scroll_tabs(node.hovered_tab_scroll)
+    return
   end
   local idx = node:get_tab_overlapping_point(x, y)
   if idx then
@@ -769,6 +808,8 @@ function RootView:on_mouse_moved(x, y, dx, dy)
       table.insert(node.views, tab_index, tab)
       self.dragged_node = tab_index
     end
+  elseif self:get_tab_scroll_index(x, y) then
+    system.set_cursor("arrow")
   else
     system.set_cursor(node.active_view.cursor)
   end
