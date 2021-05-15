@@ -59,7 +59,8 @@ function Node:new(type)
   end
   self.hovered = {x = -1, y = -1 }
   self.hovered_close = 0
-  self.tab_margin = style.padding.x
+  self.tab_margin = 0
+  self.tab_start = 1
   self.move_towards = View.move_towards
 end
 
@@ -236,11 +237,20 @@ function Node:get_divider_overlapping_point(px, py)
 end
 
 
+function Node:get_visible_tabs_number()
+  -- FIXME: do not hard-code the max number of tabs
+  return math.min(#self.views, 8)
+end
+
+
 function Node:get_tab_overlapping_point(px, py)
   if #self.views == 1 then return nil end
-  local x, y, w, h = self:get_tab_rect(1)
-  if px >= x and py >= y and px < x + w * #self.views and py < y + h then
-    return math.floor((px - x) / w) + 1
+  local tabs_number = self:get_visible_tabs_number()
+  for i = self.tab_start, tabs_number do
+    local x, y, w, h = self:get_tab_rect(i)
+    if px >= x and py >= y and px < x + w and py < y + h then
+      return i
+    end
   end
 end
 
@@ -255,15 +265,22 @@ end
 function Node:tab_hovered_update(px, py)
   local tab_index = self:get_tab_overlapping_point(px, py)
   self.hovered_tab = tab_index
+  self.hovered_close = 0
+  self.hovered_tab_scroll = 0
   if tab_index then
     local x, y, w, h = self:get_tab_rect(tab_index)
     local cx, cw = close_button_location(x, w)
     if px >= cx and px < cx + cw and py >= y and py < y + h then
       self.hovered_close = tab_index
-      return
+    end
+  else
+    for i = 1, 2 do
+      local x, y, w, h = self:get_scroll_button_rect(i)
+      if px >= x and px < x + w and py >= y and py < y + h then
+        self.hovered_tab_scroll = i
+      end
     end
   end
-  self.hovered_close = 0
 end
 
 
@@ -280,9 +297,23 @@ function Node:get_child_overlapping_point(x, y)
 end
 
 
+function Node:get_scroll_button_rect(index)
+  local w = style.icon_font:get_width(">")
+  local pad = w
+  local h = style.font:get_height() + style.padding.y * 2
+  if index == 1 then
+    return self.position.x, self.position.y, w + 2 * pad, h, pad
+  else
+    return self.position.x + self.size.x - w - 2 * pad, self.position.y, w + 2 * pad, h, pad
+  end
+end
+
+
 function Node:get_tab_rect(idx)
-  local tw = math.min(style.tab_width, (self.size.x - self.tab_margin) / #self.views)
-  local x_left = self.position.x + tw * (idx - 1)
+  local tabs_number = self:get_visible_tabs_number()
+  local _, _, sbw = self:get_scroll_button_rect(1)
+  local tw = math.min(style.tab_width, (self.size.x - self.tab_margin - sbw * 2) / tabs_number)
+  local x_left = self.position.x + sbw + tw * (idx - self.tab_start)
   local x1, x2 = math.floor(x_left), math.floor(x_left + tw)
   local h = style.font:get_height() + style.padding.y * 2
   return x1, self.position.y, x2 - x1, h
@@ -392,7 +423,7 @@ function Node:update()
       view:update()
     end
     self:tab_hovered_update(self.hovered.x, self.hovered.y)
-    self:move_towards("tab_margin", style.padding.x)
+    self:move_towards("tab_margin", 0)
   else
     self.a:update()
     self.b:update()
@@ -401,12 +432,24 @@ end
 
 
 function Node:draw_tabs()
-  local x, y, _, h = self:get_tab_rect(1)
+  local x, y, _, h, scroll_padding = self:get_scroll_button_rect(1)
   local ds = style.divider_size
   local dots_width = style.font:get_width("…")
   core.push_clip_rect(x, y, self.size.x, h)
   renderer.draw_rect(x, y, self.size.x, h, style.background2)
   renderer.draw_rect(x, y + h - ds, self.size.x, ds, style.divider)
+
+  if self.tab_start > 1 then
+    local button_style = self.hovered_tab_scroll == 1 and style.text or style.dim
+    common.draw_text(style.icon_font, button_style, "<", nil, x + scroll_padding, y, 0, h)
+  end
+
+  local tabs_number = self:get_visible_tabs_number()
+  if #self.views > self.tab_start + tabs_number - 1 then
+    local xrb, yrb = self:get_scroll_button_rect(2)
+    local button_style = self.hovered_tab_scroll == 2 and style.text or style.dim
+    common.draw_text(style.icon_font, button_style, ">", nil, xrb + scroll_padding, yrb, 0, h)
+  end
 
   for i, view in ipairs(self.views) do
     local x, y, w, h = self:get_tab_rect(i)
@@ -637,6 +680,17 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
     return
   end
   local node = self.root_node:get_child_overlapping_point(x, y)
+  -- FIXME: move the operations below into a node's method
+  if node.hovered_tab_scroll == 1 then
+    if node.tab_start > 1 then
+      node.tab_start = node.tab_start - 1
+    end
+  elseif node.hovered_tab_scroll == 2 then
+    local tabs_number = node:get_visible_tabs_number()
+    if node.tab_start + tabs_number - 1 < #node.views then
+      node.tab_start = node.tab_start + 1
+    end
+  end
   local idx = node:get_tab_overlapping_point(x, y)
   if idx then
     if button == "middle" or node.hovered_close == idx then
