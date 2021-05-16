@@ -60,8 +60,9 @@ function Node:new(type)
   end
   self.hovered = {x = -1, y = -1 }
   self.hovered_close = 0
-  self.tab_margin = 0
+  self.tab_shift = 0
   self.tab_offset = 1
+  self.tab_width = style.tab_width
   self.move_towards = View.move_towards
 end
 
@@ -246,6 +247,7 @@ end
 function Node:get_tab_overlapping_point(px, py)
   if #self.views == 1 then return nil end
   local tabs_number = self:get_visible_tabs_number()
+  -- FIXME: looping over tabs is may be not needed. Find a simpler way.
   for i = self.tab_offset, self.tab_offset + tabs_number - 1 do
     local x, y, w, h = self:get_tab_rect(i)
     if px >= x and py >= y and px < x + w and py < y + h then
@@ -320,9 +322,8 @@ end
 function Node:get_tab_rect(idx)
   local tabs_number = self:get_visible_tabs_number()
   local _, _, sbw = self:get_scroll_button_rect(1)
-  local tw = math.min(style.tab_width, (self.size.x - self.tab_margin - sbw * 2) / tabs_number)
-  local x_left = self.position.x + sbw + tw * (idx - self.tab_offset)
-  local x1, x2 = math.floor(x_left), math.floor(x_left + tw)
+  local x_left = self.position.x + sbw + self.tab_width * (idx - 1) - self.tab_shift
+  local x1, x2 = math.floor(x_left), math.floor(x_left + self.tab_width)
   local h = style.font:get_height() + style.padding.y * 2
   return x1, self.position.y, x2 - x1, h
 end
@@ -463,6 +464,13 @@ function Node:scroll_tabs(dir)
 end
 
 
+function Node:target_tab_width()
+  local tabs_number = self:get_visible_tabs_number()
+  local _, _, sbw = self:get_scroll_button_rect(1)
+  return math.min(style.tab_width, (self.size.x - sbw * 2) / tabs_number)
+end
+
+
 function Node:update()
   if self.type == "leaf" then
     self:scroll_tabs_to_visible()
@@ -470,7 +478,9 @@ function Node:update()
       view:update()
     end
     self:tab_hovered_update(self.hovered.x, self.hovered.y)
-    self:move_towards("tab_margin", 0)
+    local tab_width = self:target_tab_width()
+    self:move_towards("tab_shift", tab_width * (self.tab_offset - 1))
+    self:move_towards("tab_width", tab_width)
   else
     self.a:update()
     self.b:update()
@@ -735,8 +745,6 @@ function RootView:on_mouse_pressed(button, x, y, clicks)
   local idx = node:get_tab_overlapping_point(x, y)
   if idx then
     if button == "middle" or node.hovered_close == idx then
-      local _, _, tw = node:get_tab_rect(idx)
-      node.tab_margin = node.tab_margin + tw
       node:close_view(self.root_node, node.views[idx])
     else
       self.dragged_node = idx
