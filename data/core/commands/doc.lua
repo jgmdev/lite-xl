@@ -26,7 +26,7 @@ end
 
 local function doc_multiline_selections(sort)
   local iter, state, idx, line1, col1, line2, col2 = doc():get_selections(sort)
-  return function() 
+  return function()
     idx, line1, col1, line2, col2 = iter(state, idx)
     if idx and line2 > line1 and col2 == 1 then
       line2 = line2 - 1
@@ -43,7 +43,12 @@ local function append_line_if_last_line(line)
 end
 
 local function save(filename)
-  doc():save(filename and core.normalize_to_project_dir(filename))
+  local abs_filename
+  if filename then
+    filename = core.normalize_to_project_dir(filename)
+    abs_filename = core.project_absolute_path(filename)
+  end
+  doc():save(filename, abs_filename)
   local saved_filename = doc().filename
   core.on_doc_save(saved_filename)
   core.log("Saved \"%s\"", saved_filename)
@@ -156,8 +161,8 @@ local commands = {
     local line, col = doc():get_selection()
     doc():set_selection(line, col)
   end,
-  
-  
+
+
   ["doc:indent"] = function()
     for idx, line1, col1, line2, col2 in doc_multiline_selections(true) do
       local l1, c1, l2, c2 = doc():indent_text(false, line1, col1, line2, col2)
@@ -296,7 +301,7 @@ local commands = {
   ["doc:lower-case"] = function()
     doc():replace(string.lower)
   end,
-  
+
   ["doc:go-to-line"] = function()
     local dv = dv()
 
@@ -363,14 +368,16 @@ local commands = {
     end
     core.command_view:set_text(old_filename)
     core.command_view:enter("Rename", function(filename)
-      doc():save(filename)
+      save(common.home_expand(filename))
       core.log("Renamed \"%s\" to \"%s\"", old_filename, filename)
       if filename ~= old_filename then
         os.remove(old_filename)
       end
-    end, common.path_suggest)
+    end, function (text)
+      return common.home_encode_list(common.path_suggest(common.home_expand(text)))
+    end)
   end,
-  
+
 
   ["file:delete"] = function()
     local filename = doc().abs_filename
@@ -390,7 +397,7 @@ local commands = {
     split_cursor(-1)
     doc():merge_cursors()
   end,
-  
+
   ["doc:create-cursor-next-line"] = function()
     split_cursor(1)
     doc():merge_cursors()

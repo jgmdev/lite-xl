@@ -36,14 +36,8 @@ local function save_session()
 end
 
 
-local function normalize_path(s)
-  local drive, path = s:match("^([a-z]):([/\\].*)")
-  return drive and drive:upper() .. ":" .. path or s
-end
-
-
 local function update_recents_project(action, dir_path_abs)
-  local dirname = normalize_path(dir_path_abs)
+  local dirname = common.normalize_path(dir_path_abs)
   if not dirname then return end
   local recents = core.recent_projects
   local n = #recents
@@ -70,7 +64,7 @@ function core.set_project_dir(new_dir, change_project_fn)
   local chdir_ok = pcall(system.chdir, new_dir)
   if chdir_ok then
     if change_project_fn then change_project_fn() end
-    core.project_dir = normalize_path(new_dir)
+    core.project_dir = common.normalize_path(new_dir)
     core.project_directories = {}
     core.add_project_directory(new_dir)
     core.project_files = {}
@@ -379,7 +373,7 @@ function core.add_project_directory(path)
   -- top directories has a file-like "item" but the item.filename
   -- will be simply the name of the directory, without its path.
   -- The field item.topdir will identify it as a top level directory.
-  path = normalize_path(path)
+  path = common.normalize_path(path)
   table.insert(core.project_directories, {
     name = path,
     item = {filename = common.basename(path), type = "dir", topdir = true},
@@ -644,6 +638,22 @@ function core.on_doc_save(filename)
   end
 end
 
+
+core.doc_close_hooks = {}
+function core.add_close_hook(fn)
+  core.doc_close_hooks[#core.doc_close_hooks + 1] = fn
+end
+
+
+function core.on_doc_close(doc)
+  core.log_quiet("Closed doc \"%s\"", doc:get_name())
+
+  for _, hook in ipairs(core.doc_close_hooks) do
+    hook(doc)
+  end
+end
+
+
 local function quit_with_function(quit_fn, force)
   if force then
     delete_temp_files()
@@ -701,24 +711,28 @@ function core.load_plugins()
     userdir = {dir = USERDIR, plugins = {}},
     datadir = {dir = DATADIR, plugins = {}},
   }
-  for _, root_dir in ipairs {USERDIR, DATADIR} do
+  local files = {}
+  for _, root_dir in ipairs {DATADIR, USERDIR} do
     local plugin_dir = root_dir .. "/plugins"
-    local files = system.list_dir(plugin_dir)
-    for _, filename in ipairs(files or {}) do
-      local basename = filename:match("(.-)%.lua$") or filename
-      local version_match = check_plugin_version(plugin_dir .. '/' .. filename)
-      if not version_match then
-        core.log_quiet("Version mismatch for plugin %q from %s", basename, plugin_dir)
-        local ls = refused_list[root_dir == USERDIR and 'userdir' or 'datadir'].plugins
-        ls[#ls + 1] = filename
-      end
-      if version_match and config[basename] ~= false then
-        local modname = "plugins." .. basename
-        local ok = core.try(require, modname)
-        if ok then core.log_quiet("Loaded plugin %q from %s", basename, plugin_dir) end
-        if not ok then
-          no_errors = false
-        end
+    for _, filename in ipairs(system.list_dir(plugin_dir) or {}) do
+      files[filename] = plugin_dir -- user plugins will always replace system plugins
+    end
+  end
+
+  for filename, plugin_dir in pairs(files) do
+    local basename = filename:match("(.-)%.lua$") or filename
+    local version_match = check_plugin_version(plugin_dir .. '/' .. filename)
+    if not version_match then
+      core.log_quiet("Version mismatch for plugin %q from %s", basename, plugin_dir)
+      local ls = refused_list[root_dir == USERDIR and 'userdir' or 'datadir'].plugins
+      ls[#ls + 1] = filename
+    end
+    if version_match and config[basename] ~= false then
+      local modname = "plugins." .. basename
+      local ok = core.try(require, modname)
+      if ok then core.log_quiet("Loaded plugin %q from %s", basename, plugin_dir) end
+      if not ok then
+        no_errors = false
       end
     end
   end
@@ -815,10 +829,30 @@ function core.normalize_to_project_dir(filename)
 end
 
 
+-- The function below works like system.absolute_path except it
+-- doesn't fail if the file does not exist. We consider that the
+-- current dir is core.project_dir so relative filename are considered
+-- to be in core.project_dir.
+-- Please note that .. or . in the filename are not taken into account.
+-- This function should get only filenames normalized using
+-- common.normalize_path function.
+function core.project_absolute_path(filename)
+  if filename:match('^%a:\\') or filename:find('/', 1, true) then
+    return filename
+  else
+    return core.project_dir .. PATHSEP .. filename
+  end
+end
+
+
 function core.open_doc(filename)
+  local new_file = not filename or not system.get_file_info(filename)
+  local abs_filename
   if filename then
+    -- normalize filename and set absolute filename then
     -- try to find existing doc for filename
-    local abs_filename = system.absolute_path(filename)
+    filename = core.normalize_to_project_dir(filename)
+    abs_filename = core.project_absolute_path(filename)
     for _, doc in ipairs(core.docs) do
       if doc.abs_filename and abs_filename == doc.abs_filename then
         return doc
@@ -826,8 +860,7 @@ function core.open_doc(filename)
     end
   end
   -- no existing doc for filename; create new
-  filename = core.normalize_to_project_dir(filename)
-  local doc = Doc(filename)
+  local doc = Doc(filename, abs_filename, new_file)
   table.insert(core.docs, doc)
   core.log_quiet(filename and "Opened doc \"%s\"" or "Opened new doc", filename)
   return doc
@@ -972,7 +1005,7 @@ function core.step()
     local doc = core.docs[i]
     if #core.get_views_referencing_doc(doc) == 0 then
       table.remove(core.docs, i)
-      core.log_quiet("Closed doc \"%s\"", doc:get_name())
+      core.on_doc_close(doc)
     end
   end
 
