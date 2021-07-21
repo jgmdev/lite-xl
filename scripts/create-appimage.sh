@@ -9,7 +9,7 @@ ARCH="$(uname -m)"
 APPIMAGETOOL=appimagetool
 
 setup_appimagetool(){
-  if which appimagetool > /dev/null ; then
+  if ! which appimagetool > /dev/null ; then
     if [ ! -e appimagetool ]; then
       if ! wget -O appimagetool "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${ARCH}.AppImage" ; then
         echo "Could not download the appimagetool for the arch '${ARCH}'."
@@ -64,34 +64,36 @@ generate_appimage(){
   
   echo "Copying libraries..."
   
-  local ignore_libs=(
-    X11
-    linux-vdso
-    libstdc++.so
-    libm.so
-    libgcc_s.so
-    libpthread.so
-    libc.so
-    linux-
-    libdl.so
-    libglib
+  local allowed_libs=(
+    libfreetype
+    libpcre2
+    libSDL2
+    libsndio
+    liblua
   )
 
   while read line; do
-    for lib in "${ignore_libs[@]}" ; do
-      if echo "$line" | grep "$lib" > /dev/null ; then
-        echo "  Ignoring: $line"
+    local libname="$(echo $line | cut -d' ' -f1)"
+    local libpath="$(echo $line | cut -d' ' -f2)"
+    for lib in "${allowed_libs[@]}" ; do
+      if echo "$libname" | grep "$lib" > /dev/null ; then
+        cp "$libpath" LiteXL.AppDir/usr/lib/
         continue 2
       fi
     done
-    cp "/usr/lib/$line" LiteXL.AppDir/usr/lib/
-  done < <(ldd build/src/lite-xl | awk "{print \$1}")
+    echo "  Ignoring: $libname"
+  done < <(ldd build/src/lite-xl | awk '{print $1 " " $3}')
   
   echo "Generating AppImage..."
-  $APPIMAGETOOL LiteXL.AppDir LiteXL-${ARCH}.AppImage
+  local version=""
+  if [ "$1" != "" ]; then
+    version="-$1"
+  fi
+    
+  $APPIMAGETOOL LiteXL.AppDir LiteXL${version}-${ARCH}.AppImage
 }
 
 setup_appimagetool
 download_appimage_apprun
 build_litexl
-generate_appimage
+generate_appimage $1
