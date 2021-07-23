@@ -64,29 +64,24 @@ generate_appimage(){
   
   echo "Copying libraries..."
   
-  local ignore_libs=(
-    X11
-    linux-vdso
-    libstdc++.so
-    libm.so
-    libgcc_s.so
-    libpthread.so
-    libc.so
-    linux-
-    libdl.so
-    libglib
+  local allowed_libs=(
+    libfreetype
+    libpcre2
+    libSDL2
+    libsndio
+    liblua
   )
 
   while read line; do
     local libname="$(echo $line | cut -d' ' -f1)"
     local libpath="$(echo $line | cut -d' ' -f2)"
-    for lib in "${ignore_libs[@]}" ; do
+    for lib in "${allowed_libs[@]}" ; do
       if echo "$libname" | grep "$lib" > /dev/null ; then
-        echo "  Ignoring: $libname"
+        cp "$libpath" LiteXL.AppDir/usr/lib/
         continue 2
       fi
     done
-    cp "$libpath" LiteXL.AppDir/usr/lib/
+    echo "  Ignoring: $libname"
   done < <(ldd build/src/lite-xl | awk '{print $1 " " $3}')
   
   echo "Generating AppImage..."
