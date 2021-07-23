@@ -55,6 +55,9 @@ endif
 if host_machine.system() == 'darwin'
     lite_link_args += ['-framework', 'CoreServices', '-framework', 'Foundation']
 endif
+if host_machine.system() != 'windows'
+    lite_link_args += ['-lpthread']
+endif
 
 lite_rc = []
 if host_machine.system() == 'windows'
