@@ -110,6 +110,12 @@ void set_macos_bundle_resources(lua_State *L);
   #define LITE_ARCH_TUPLE ARCH_PROCESSOR "-" ARCH_PLATFORM
 #endif
 
+#ifdef LUA_JIT
+  #define LITE_LUAJIT "true"
+#else
+  #define LITE_LUAJIT "false"
+#endif
+
 int main(int argc, char **argv) {
 #ifdef _WIN32
   HINSTANCE lib = LoadLibrary("user32.dll");
@@ -207,6 +213,7 @@ init_lua:
     "local core\n"
     "xpcall(function()\n"
     "  HOME = os.getenv('" LITE_OS_HOME "')\n"
+    "  LUAJIT = " LITE_LUAJIT "\n"
     "  local exedir = EXEFILE:match('^(.*)" LITE_PATHSEP_PATTERN LITE_NONPATHSEP_PATTERN "$')\n"
     "  local prefix = exedir:match('^(.*)" LITE_PATHSEP_PATTERN "bin$')\n"
     "  dofile((MACOS_RESOURCES or (prefix and prefix .. '/share/lite-xl' or exedir .. '/data')) .. '/core/start.lua')\n"
