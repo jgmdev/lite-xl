@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include "api.h"
 #include "../rencache.h"
+#include "../renderer.h"
 #ifdef _WIN32
   #include <direct.h>
   #include <windows.h>
@@ -37,6 +38,8 @@
 #endif
 
 extern SDL_Window *window;
+extern float initial_scale;
+static bool got_initial_scale = false;
 
 
 static const char* button_name(int button) {
@@ -194,6 +197,11 @@ top:
         lua_pushinteger(L, e.window.data1);
         lua_pushinteger(L, e.window.data2);
         return 3;
+      } else if (e.window.event == SDL_WINDOWEVENT_DISPLAY_CHANGED ) {
+        lua_pushstring(L, "displaychanged");
+        /* The display index. */
+        lua_pushinteger(L, e.window.data1);
+        return 2;
       } else if (e.window.event == SDL_WINDOWEVENT_EXPOSED) {
         rencache_invalidate();
         lua_pushstring(L, "exposed");
@@ -412,6 +420,56 @@ static int f_set_cursor(lua_State *L) {
   return 0;
 }
 
+static int f_get_scale(lua_State *L) {
+  /* returns the startup scale factor on first call if not 100% */
+  if (!got_initial_scale) {
+    got_initial_scale = true;
+    if (initial_scale != 1.0) {
+      lua_pushnumber(L, initial_scale);
+      return 1;
+    }
+  }
+
+  float scale = 1.0;
+#ifndef __APPLE__
+  SDL_DisplayMode dm;
+  char* env_scale = NULL;
+  float system_scale = 0;
+  int display_index = SDL_GetWindowDisplayIndex(window);
+
+  if (
+    (env_scale = getenv("GDK_SCALE")) != NULL
+    &&
+    (system_scale = strtod(env_scale, NULL)) > 0
+  ) {
+    scale = system_scale;
+  } else if (
+    (env_scale = getenv("QT_SCALE_FACTOR")) != NULL
+    &&
+    (system_scale = strtod(env_scale, NULL)) > 0
+  ) {
+    scale = system_scale;
+  } else if ((system_scale = ren_get_scale_factor(window)) != 1.0) {
+    scale = system_scale;
+  } else if (SDL_GetCurrentDisplayMode(display_index, &dm) == 0) {
+    float base_width = 1280, base_height = 720;
+    float dmw = (float) dm.w, dmh = (float) dm.h;
+    if (dmw < dmh) {
+      base_width = 720;
+      base_height = 1280;
+    }
+    float current_aspect_ratio = dmw / dmh,
+      base_aspect_ratio = base_width / base_height;
+    if (current_aspect_ratio >= base_aspect_ratio) {
+      scale = dmw / base_width;
+    } else {
+      scale = dmh / base_height;
+    }
+  }
+#endif
+  lua_pushnumber(L, scale);
+  return 1;
+}
 
 static int f_set_window_title(lua_State *L) {
   const char *title = luaL_checkstring(L, 1);
@@ -1075,6 +1133,7 @@ static const luaL_Reg lib[] = {
   { "poll_event",          f_poll_event          },
   { "wait_event",          f_wait_event          },
   { "set_cursor",          f_set_cursor          },
+  { "get_scale",           f_get_scale           },
   { "set_window_title",    f_set_window_title    },
   { "set_window_mode",     f_set_window_mode     },
   { "get_window_mode",     f_get_window_mode     },
