@@ -547,11 +547,12 @@ float ren_font_group_get_size(RenFont **fonts) {
 }
 
 void ren_font_group_set_size(RenFont **fonts, float size) {
-  const int surface_scale = renwin_surface_scale(&window_renderer);
+  float surface_scale_x, surface_scale_y;
+  renwin_surface_scale(&window_renderer, &surface_scale_x, &surface_scale_y);
   for (int i = 0; i < FONT_FALLBACK_MAX && fonts[i]; ++i) {
     font_clear_glyph_cache(fonts[i]);
     FT_Face face = fonts[i]->face;
-    FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale));
+    FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale_x));
     fonts[i]->size = size;
     fonts[i]->height = (short)((face->height / (float)face->units_per_EM) * size);
     fonts[i]->baseline = (short)((face->ascender / (float)face->units_per_EM) * size);
