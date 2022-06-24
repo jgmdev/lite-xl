@@ -26,6 +26,7 @@ show_help() {
   echo "                          macOS: disabled when used with --bundle,"
   echo "                          Windows: Implicit being the only option."
   echo "-r --release              Compile in release mode."
+  echo "-R --renderer             Use SDL accelerated texture renderer."
   echo
 }
 
@@ -40,6 +41,7 @@ main() {
   local portable
   local pgo
   local patch_lua
+  local renderer
 
   local lua_subproject_path
 
@@ -81,6 +83,10 @@ main() {
         ;;
       -O|--pgo)
         pgo="-Db_pgo=generate"
+        shift
+        ;;
+      -R|--renderer)
+        renderer="-Drenderer=true"
         shift
         ;;
       -U|--windows-lua-utf)
@@ -132,6 +138,7 @@ main() {
     $bundle \
     $portable \
     $pgo \
+    $renderer \
     "${build_dir}"
 
   lua_subproject_path=$(echo subprojects/lua-*/)
