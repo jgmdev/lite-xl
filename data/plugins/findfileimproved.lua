@@ -8,8 +8,8 @@ local StatusView = require "core.statusview"
 
 ---@type thread
 local thread = nil
-if pcall(require, "thread") then
-  thread = require "thread"
+if pcall(require, "plugins.thread") then
+  thread = require "plugins.thread"
 end
 
 local project_files = {}
