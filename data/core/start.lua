@@ -39,7 +39,7 @@ package.cpath =
   DATADIR .. '/?/init.' .. suffix .. ";"
 
 package.native_plugins = {}
-package.searchers = { package.searchers[1], package.searchers[2], function(modname)
+table.insert(package.searchers, 1, function(modname)
   local path = package.searchpath(modname, package.cpath)
   if not path then return nil end
   if not LUAJIT then
@@ -47,7 +47,7 @@ package.searchers = { package.searchers[1], package.searchers[2], function(modna
   else
     return function() return system.load_native_plugin(modname, path) end
   end
-end }
+end)
 
 table.pack = table.pack or pack or function(...) return {...} end
 table.unpack = table.unpack or unpack
