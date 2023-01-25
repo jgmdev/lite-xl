@@ -6,6 +6,7 @@ int luaopen_regex(lua_State *L);
 int luaopen_process(lua_State *L);
 int luaopen_dirmonitor(lua_State* L);
 int luaopen_utf8extra(lua_State* L);
+int luaopen_encoding(lua_State* L);
 
 #ifdef LUA_JIT
 int luaopen_bit32(lua_State *L);
@@ -27,6 +28,7 @@ static const luaL_Reg libs[] = {
   { "process",    luaopen_process    },
   { "dirmonitor", luaopen_dirmonitor },
   { "utf8extra",  luaopen_utf8extra  },
+  { "encoding",   luaopen_encoding   },
   LUAJIT_COMPATIBILITY
   { NULL, NULL }
 };
