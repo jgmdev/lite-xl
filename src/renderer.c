@@ -259,9 +259,8 @@ RenFont* ren_font_load(RenWindow *window_renderer, const char* path, float size,
 
 #endif
 
-  float surface_scale_x, surface_scale_y;
-  renwin_surface_scale(window_renderer, &surface_scale_x, &surface_scale_y);
-  if (FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale_x)))
+  const int surface_scale = renwin_surface_scale(window_renderer);
+  if (FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale)))
     goto failure;
   int len = strlen(path);
   RenFont* font = check_alloc(calloc(1, sizeof(RenFont) + len + 1));
@@ -547,12 +546,11 @@ float ren_font_group_get_size(RenFont **fonts) {
 }
 
 void ren_font_group_set_size(RenWindow *window_renderer, RenFont **fonts, float size) {
-  float surface_scale_x;
-  renwin_surface_scale(window_renderer, &surface_scale_x, NULL);
+  const int surface_scale = renwin_surface_scale(window_renderer);
   for (int i = 0; i < FONT_FALLBACK_MAX && fonts[i]; ++i) {
     font_clear_glyph_cache(fonts[i]);
     FT_Face face = fonts[i]->face;
-    FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale_x));
+    FT_Set_Pixel_Sizes(face, 0, (int)(size*surface_scale));
     fonts[i]->size = size;
     fonts[i]->height = (short)((face->height / (float)face->units_per_EM) * size);
     fonts[i]->baseline = (short)((face->ascender / (float)face->units_per_EM) * size);
@@ -578,20 +576,17 @@ float ren_font_group_get_width(RenWindow *window_renderer, RenFont **fonts, cons
       break;
     width += (!font || metric->xadvance) ? metric->xadvance : fonts[0]->space_advance;
   }
-  float surface_scale_x;
-  renwin_surface_scale(window_renderer, &surface_scale_x, NULL);
-  return width / surface_scale_x;
+  const int surface_scale = renwin_surface_scale(window_renderer);
+  return width / surface_scale;
 }
 
-float ren_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *text, size_t len, float x, float y, RenColor color) {
+float ren_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *text, size_t len, float x, int y, RenColor color) {
   SDL_Surface *surface = renwin_get_surface(window_renderer);
   const RenRect clip = window_renderer->clip;
 
-  float surface_scale_x, surface_scale_y;
-  renwin_surface_scale(window_renderer, &surface_scale_x, &surface_scale_y);
-
-  float pen_x = x * surface_scale_x;
-  y *= surface_scale_y;
+  const int surface_scale = renwin_surface_scale(window_renderer);
+  float pen_x = x * surface_scale;
+  y *= surface_scale;
   int bytes_per_pixel = surface->format->BytesPerPixel;
   const char* end = text + len;
   uint8_t* destination_pixels = surface->pixels;
@@ -617,7 +612,7 @@ float ren_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *tex
     if (set->surface && color.a > 0 && end_x >= clip.x && start_x < clip_end_x) {
       uint8_t* source_pixels = set->surface->pixels;
       for (int line = metric->y0; line < metric->y1; ++line) {
-        int target_y = line + y - metric->bitmap_top + font->baseline * surface_scale_y;
+        int target_y = line + y - metric->bitmap_top + font->baseline * surface_scale;
         if (target_y < clip.y)
           continue;
         if (target_y >= clip_end_y)
@@ -664,16 +659,16 @@ float ren_draw_text(RenWindow *window_renderer, RenFont **fonts, const char *tex
     else if(font != last || text == end) {
       float local_pen_x = text == end ? pen_x + adv : pen_x;
       if (underline)
-        ren_draw_rect(window_renderer, (RenRect){last_pen_x, y / surface_scale_y + last->height - 1, (local_pen_x - last_pen_x) / surface_scale_x, last->underline_thickness * surface_scale_x}, color);
+        ren_draw_rect(window_renderer, (RenRect){last_pen_x, y / surface_scale + last->height - 1, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
       if (strikethrough)
-        ren_draw_rect(window_renderer, (RenRect){last_pen_x, y / surface_scale_y + (float)last->height / 2, (local_pen_x - last_pen_x) / surface_scale_x, last->underline_thickness * surface_scale_x}, color);
+        ren_draw_rect(window_renderer, (RenRect){last_pen_x, y / surface_scale + last->height / 2, (local_pen_x - last_pen_x) / surface_scale, last->underline_thickness * surface_scale}, color);
       last = font;
       last_pen_x = pen_x;
     }
 
     pen_x += adv;
   }
-  return pen_x / surface_scale_x;
+  return pen_x / surface_scale;
 }
 
 /******************* Rectangles **********************/
@@ -688,21 +683,19 @@ static inline RenColor blend_pixel(RenColor dst, RenColor src) {
 void ren_draw_rect(RenWindow *window_renderer, RenRect rect, RenColor color) {
   if (color.a == 0) { return; }
 
-  float surface_scale_x, surface_scale_y;
-  renwin_surface_scale(window_renderer, &surface_scale_x, &surface_scale_y);
+  const int surface_scale = renwin_surface_scale(window_renderer);
 
   /* transforms coordinates in pixels. */
-  rect.x      *= surface_scale_x;
-  rect.y      *= surface_scale_y;
-  rect.width  *= surface_scale_x;
-  rect.height *= surface_scale_y;
+  rect.x      *= surface_scale;
+  rect.y      *= surface_scale;
+  rect.width  *= surface_scale;
+  rect.height *= surface_scale;
 
   const RenRect clip = window_renderer->clip;
   int x1 = rect.x < clip.x ? clip.x : rect.x;
   int y1 = rect.y < clip.y ? clip.y : rect.y;
   int x2 = rect.x + rect.width;
   int y2 = rect.y + rect.height;
-
   x2 = x2 > clip.x + clip.width ? clip.x + clip.width : x2;
   y2 = y2 > clip.y + clip.height ? clip.y + clip.height : y2;
 
@@ -766,19 +759,8 @@ void ren_set_clip_rect(RenWindow *window_renderer, RenRect rect) {
 
 
 void ren_get_size(RenWindow *window_renderer, int *x, int *y) {
-  float surface_scale_x, surface_scale_y;
-  renwin_surface_scale(window_renderer, &surface_scale_x, &surface_scale_y);
+  const int scale = renwin_surface_scale(window_renderer);
   SDL_Surface *surface = renwin_get_surface(window_renderer);
-  *x = surface->w / surface_scale_x;
-  *y = surface->h / surface_scale_y;
-}
-
-
-float ren_get_scale_factor(SDL_Window *win) {
-  int w_pixels, h_pixels;
-  int w_points, h_points;
-  SDL_GL_GetDrawableSize(win, &w_pixels, &h_pixels);
-  SDL_GetWindowSize(win, &w_points, &h_points);
-  float scale = (float) w_pixels / (float) w_points;
-  return roundf(scale * 100) / 100;
+  *x = surface->w / scale;
+  *y = surface->h / scale;
 }
