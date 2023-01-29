@@ -24,8 +24,6 @@ system = {}
 ---
 ---Window events:
 --- * "quit"
---- * "displaychanged" -> idx
---- * "moved" -> x, y
 --- * "resized" -> width, height (in points)
 --- * "exposed"
 --- * "minimized"
@@ -74,12 +72,6 @@ function system.wait_event(timeout) end
 ---
 ---@param type string | "arrow" | "ibeam" | "sizeh" | "sizev" | "hand"
 function system.set_cursor(type) end
-
----
----Retrieve a sane scale value using current desktop resolution.
----
----@return number scale
-function system.get_scale() end
 
 ---
 ---Change the window title.
