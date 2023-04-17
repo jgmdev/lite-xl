@@ -196,7 +196,10 @@ elif get_option('bundle') and host_machine.system() == 'darwin'
     lite_bindir = 'Contents/MacOS'
     lite_docdir = 'Contents/Resources'
     lite_datadir = 'Contents/Resources'
-    install_data('resources/icons/icon.icns', install_dir : 'Contents/Resources')
+    install_data(
+        'resources/icons/icon.icns',
+        install_dir : 'Contents/Resources'
+    )
     configure_file(
         input : 'resources/macos/Info.plist.in',
         output : 'Info.plist',
@@ -224,12 +227,21 @@ endif
 install_data('licenses/licenses.md', install_dir : lite_docdir)
 
 install_subdir('docs/api' , install_dir : lite_datadir, strip_directory: true)
-install_subdir('data/core' , install_dir : lite_datadir, exclude_files : 'start.lua')
+install_subdir('data/core',
+    install_dir : lite_datadir,
+    exclude_files : 'start.lua'
+)
+install_subdir('data/plugins',
+    install_dir : lite_datadir,
+    exclude_files : 'meson.build',
+    exclude_directories : ['thread']
+)
 
-data_dirs = ['fonts', 'plugins', 'colors']
+data_dirs = ['fonts', 'colors']
 if lua_jit_found
     data_dirs += ['compat']
 endif
+
 foreach data_module : data_dirs
     install_subdir(join_paths('data', data_module), install_dir : lite_datadir)
 endforeach
@@ -243,5 +255,6 @@ configure_file(
 
 if not get_option('source-only')
     subdir('src')
+    subdir('data/plugins')
     subdir('scripts')
 endif
