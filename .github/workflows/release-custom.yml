@@ -1,4 +1,4 @@
-name: Release JIT
+name: Release Custom
 
 on:
   push:
@@ -57,7 +57,7 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "INSTALL_REF=${{ needs.release.outputs.version }}-jit" >> "$GITHUB_ENV"
+          echo "INSTALL_REF=${{ needs.release.outputs.version }}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v3
       - name: Python Setup
         uses: actions/setup-python@v4
@@ -72,15 +72,15 @@ jobs:
       - name: Build Portable
         run: |
           bash --version
-          bash scripts/build-jit.sh --debug --forcefallback --portable --release
+          bash scripts/build.sh --debug --forcefallback --portable --release
       - name: Package Portables
         run: |
           bash scripts/package.sh --version ${INSTALL_REF} --debug --binary --release
           bash scripts/package.sh --version ${INSTALL_REF} --debug --addons --binary --release
       - name: Build AppImages
         run: |
-          bash scripts/appimage-jit.sh --debug --static --version ${INSTALL_REF} --release
-          bash scripts/appimage-jit.sh --debug --nobuild --addons --version ${INSTALL_REF}
+          bash scripts/appimage.sh --debug --static --version ${INSTALL_REF} --release
+          bash scripts/appimage.sh --debug --nobuild --addons --version ${INSTALL_REF}
       - name: Upload Files
         uses: softprops/action-gh-release@v1
         with:
@@ -112,9 +112,9 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "INSTALL_REF=${{ needs.release.outputs.version }}-jit" >> "$GITHUB_ENV"
-          echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-jit-macos-${{ matrix.arch }}" >> "$GITHUB_ENV"
-          echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-jit-addons-macos-${{ matrix.arch }}" >> "$GITHUB_ENV"
+          echo "INSTALL_REF=${{ needs.release.outputs.version }}" >> "$GITHUB_ENV"
+          echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-macos-${{ matrix.arch }}" >> "$GITHUB_ENV"
+          echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-addons-macos-${{ matrix.arch }}" >> "$GITHUB_ENV"
           if [[ $(uname -m) != ${{ matrix.arch }} ]]; then echo "ARCH=--cross-arch ${{ matrix.arch }}" >> "$GITHUB_ENV"; fi
       - uses: actions/checkout@v3
       - name: Python Setup
@@ -126,7 +126,7 @@ jobs:
       - name: Build
         run: |
           bash --version
-          bash scripts/build-jit.sh --bundle --debug --forcefallback --release $ARCH
+          bash scripts/build.sh --bundle --debug --forcefallback --release $ARCH
       - name: Create DMG Image
         run: |
           bash scripts/package.sh --version ${INSTALL_REF} $ARCH --debug --dmg --release
@@ -161,8 +161,8 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "INSTALL_BASE=lite-xl-${{ needs.release.outputs.version }}-jit-macos" >> "$GITHUB_ENV"
-          echo "INSTALL_BASE_ADDONS=lite-xl-${{ needs.release.outputs.version }}-jit-addons-macos" >> "$GITHUB_ENV"
+          echo "INSTALL_BASE=lite-xl-${{ needs.release.outputs.version }}-macos" >> "$GITHUB_ENV"
+          echo "INSTALL_BASE_ADDONS=lite-xl-${{ needs.release.outputs.version }}-addons-macos" >> "$GITHUB_ENV"
       - uses: actions/checkout@v2
       - name: Download Artifacts
         uses: actions/download-artifact@v3
@@ -218,22 +218,22 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-          echo "INSTALL_REF=${{ needs.release.outputs.version }}-jit" >> "$GITHUB_ENV"
+          echo "INSTALL_REF=${{ needs.release.outputs.version }}" >> "$GITHUB_ENV"
           if [[ "${MSYSTEM}" == "MINGW64" ]]; then
             echo "BUILD_ARCH=x86_64" >> "$GITHUB_ENV"
-            echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-jit-windows-x86_64" >> "$GITHUB_ENV"
-            echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-jit-addons-windows-x86_64" >> "$GITHUB_ENV"
+            echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-windows-x86_64" >> "$GITHUB_ENV"
+            echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-addons-windows-x86_64" >> "$GITHUB_ENV"
           else
             echo "BUILD_ARCH=i686" >> "$GITHUB_ENV"
-            echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-jit-windows-i686" >> "$GITHUB_ENV"
-            echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-jit-addons-windows-i686" >> "$GITHUB_ENV"
+            echo "INSTALL_NAME=lite-xl-${{ needs.release.outputs.version }}-windows-i686" >> "$GITHUB_ENV"
+            echo "INSTALL_NAME_ADDONS=lite-xl-${{ needs.release.outputs.version }}-addons-windows-i686" >> "$GITHUB_ENV"
           fi
       - name: Install Dependencies
         run: bash scripts/install-dependencies.sh --debug
       - name: Build
         run: |
           bash --version
-          bash scripts/build-jit.sh -U --debug --forcefallback --release
+          bash scripts/build.sh -U --debug --forcefallback --release
       - name: Package
         run: bash scripts/package.sh --version ${INSTALL_REF} --debug --binary --release
       - name: Build Installer
